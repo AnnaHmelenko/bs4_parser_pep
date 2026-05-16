@@ -4,26 +4,35 @@ import logging
 
 from prettytable import PrettyTable
 
-from constants import BASE_DIR, DATETIME_FORMAT
+from constants import (
+    BASE_DIR,
+    DATETIME_FORMAT,
+    OUTPUT_FILE,
+    OUTPUT_PRETTY,
+    RESULTS_DIR_NAME,
+)
 
 
 def control_output(results, cli_args):
+    """Выбирает способ вывода результатов."""
     output = cli_args.output
 
-    if output == 'pretty':
+    if output == OUTPUT_PRETTY:
         pretty_output(results)
-    elif output == 'file':
+    elif output == OUTPUT_FILE:
         file_output(results, cli_args)
     else:
         default_output(results)
 
 
 def default_output(results):
+    """Выводит результаты построчно в терминал."""
     for row in results:
         print(*row)
 
 
 def pretty_output(results):
+    """Выводит результаты в виде таблицы PrettyTable."""
     table = PrettyTable()
     table.field_names = results[0]
     table.align = 'l'
@@ -32,7 +41,8 @@ def pretty_output(results):
 
 
 def file_output(results, cli_args):
-    results_dir = BASE_DIR / 'results'
+    """Сохраняет результаты парсинга в CSV-файл."""
+    results_dir = BASE_DIR / RESULTS_DIR_NAME
     results_dir.mkdir(exist_ok=True)
 
     parser_mode = cli_args.mode

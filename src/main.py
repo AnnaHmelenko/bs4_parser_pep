@@ -4,7 +4,6 @@ from collections import defaultdict
 from urllib.parse import urljoin
 
 import requests_cache
-from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
@@ -155,6 +154,37 @@ def get_pep_status(soup):
     return match.group(1).strip()
 
 
+def process_pep_row(session, row):
+    """Обрабатывает одну строку таблицы PEP."""
+    columns = row.find_all('td')
+
+    if len(columns) < MIN_PEP_TABLE_COLUMNS:
+        return None
+
+    first_column_tag = columns[0]
+    preview_status = first_column_tag.text.strip()[1:]
+
+    pep_link_tag = row.find('a')
+
+    if pep_link_tag is None:
+        return None
+
+    href = pep_link_tag['href']
+
+    if not re.search(r'pep-\d+', href):
+        return None
+
+    pep_link = urljoin(PEP_URL, href)
+
+    if re.search(r'pep-0+/?$', pep_link):
+        return None
+
+    pep_soup = get_soup(session, pep_link)
+    status = get_pep_status(pep_soup)
+
+    return pep_link, preview_status, status
+
+
 def pep(session):
     """Парсит статусы PEP и считает количество документов по статусам."""
     soup = get_soup(session, PEP_NUMERICAL_URL)
@@ -165,34 +195,19 @@ def pep(session):
     mismatched_statuses = []
 
     for row in tqdm(rows):
-        columns = row.find_all('td')
-
-        if len(columns) < MIN_PEP_TABLE_COLUMNS:
-            continue
-
-        first_column_tag = columns[0]
-        preview_status = first_column_tag.text.strip()[1:]
-
-        pep_link_tag = row.find('a')
-
-        if pep_link_tag is None:
-            continue
-
-        href = pep_link_tag['href']
-
-        if not re.search(r'pep-\d+', href):
-            continue
-
-        pep_link = urljoin(PEP_URL, href)
-
-        if re.search(r'pep-0+/?$', pep_link):
-            continue
-
         try:
-            pep_soup = get_soup(session, pep_link)
-            status = get_pep_status(pep_soup)
-        except (ParserResponseException, ParserStatusException) as error:
-            errors.append(f'{pep_link}\n{error}')
+            result = process_pep_row(session, row)
+
+            if result is None:
+                continue
+
+            pep_link, preview_status, status = result
+
+        except (
+            ParserResponseException,
+            ParserStatusException,
+        ) as error:
+            errors.append(str(error))
             continue
 
         expected_statuses = EXPECTED_STATUS.get(preview_status, ())
